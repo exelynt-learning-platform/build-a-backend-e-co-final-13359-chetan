@@ -32,15 +32,20 @@ public class OrderService {
             throw new BadRequestException("Cart is empty. Add items before placing an order.");
         }
 
-        // Build order items and validate stock
+        // FIX 2 (MAJOR CODE SMELL): Validate ALL stock BEFORE processing payment.
+        // Previously, payment was processed before stock check — a customer could be
+        // charged even if stock was insufficient.
         List<OrderItem> orderItems = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
 
         for (CartItem cartItem : cart.getItems()) {
             Product product = cartItem.getProduct();
+
+            // Stock validation first — throw before any payment attempt
             if (product.getStockQuantity() < cartItem.getQuantity()) {
                 throw new BadRequestException("Insufficient stock for: " + product.getName());
             }
+
             OrderItem orderItem = OrderItem.builder()
                     .product(product)
                     .quantity(cartItem.getQuantity())
@@ -50,11 +55,14 @@ public class OrderService {
             total = total.add(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
         }
 
-        // Process payment
+        // FIX 1 (MAJOR BUG): Use payment token from request DTO instead of hardcoded placeholder.
+        // Previously: paymentGatewayService.processPayment(..., "payment_token_placeholder", ...)
         String txnId = paymentGatewayService.processPayment(
-                request.getPaymentMethod(), "payment_token_placeholder", total);
+                request.getPaymentMethod(), request.getPaymentToken(), total);
 
-        // Deduct stock
+        // FIX 3 (MAJOR CODE SMELL): Stock deduction is now inside @Transactional (already on this method).
+        // If orderRepository.save(order) fails after stock deduction, the entire transaction
+        // rolls back — stock is restored automatically.
         for (OrderItem oi : orderItems) {
             Product p = oi.getProduct();
             p.setStockQuantity(p.getStockQuantity() - oi.getQuantity());
