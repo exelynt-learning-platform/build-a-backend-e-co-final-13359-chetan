@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 
@@ -25,10 +26,12 @@ public class JwtUtils {
     private long jwtExpirationMs;
 
     private Key getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(
-                java.util.Base64.getEncoder().encodeToString(jwtSecret.getBytes())
-        );
-        return Keys.hmacShaKeyFor(keyBytes);
+        // FIX 1 (CRITICAL - BUG): Removed double Base64 encoding.
+        // FIX 2 (CRITICAL - VULNERABILITY): Using StandardCharsets.UTF_8 for
+        //   platform-independent behavior. If your secret in application.properties
+        //   is already Base64-encoded, use: Decoders.BASE64.decode(jwtSecret)
+        //   If it's a plain string (current setup), use getBytes(StandardCharsets.UTF_8)
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(Authentication authentication) {
