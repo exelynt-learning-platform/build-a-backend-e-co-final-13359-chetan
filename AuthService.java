@@ -42,6 +42,7 @@ public class AuthService {
         userRepository.save(user);
 
         // Create an empty cart for the new user
+        // If this fails, @Transactional ensures userRepository.save(user) is also rolled back
         Cart cart = Cart.builder().user(user).build();
         cartRepository.save(cart);
 
